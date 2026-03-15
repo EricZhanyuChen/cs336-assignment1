@@ -38,3 +38,13 @@ checkpoints/
 # system files
 .DS_Store
 Thumbs.db
+
+# WandB local runs
+wandb/run-*/
+wandb/latest-run
+
+# Slurm logs
+logs/
+*.out
+*.err
+

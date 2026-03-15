@@ -38,6 +38,7 @@ class Embedding(torch.nn.Module):
 
        # token_ids: (batch_size, sequence_length) 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+        # token_ids = token_ids.to(self.embedding.device)
         token_ids.to(torch.long)
         embeddings = self.embedding[token_ids]
 
@@ -84,7 +85,7 @@ class SwiGLU(torch.nn.Module):
     
 class RotaryPositionalEmbedding(torch.nn.Module):
     rope_buffer: torch.Tensor
-    # Mathematical formula: theta_ik = i / theta**(2k-2/d). 
+    # Mathematical formula: theta_ik = i / [theta**(2k-2)/d]. 
     
     def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
         super().__init__()
@@ -150,7 +151,7 @@ class RotaryPositionalEmbedding(torch.nn.Module):
             raise ValueError("Input tensor dimension is not correct")
         
         # Ensure the data type of token positions is long (int64), which is required for buffer indexing.
-        token_positions = token_positions.long()
+        token_positions = token_positions.long().to(self.rope_buffer.device)
         
         # rope_sliced: shape (..., seq_len, num_groups, 2)
         # Selects the precomputed cos/sin values from the buffer for the given token positions.
@@ -171,17 +172,13 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         x2 = x_reshaped[..., 1]
 
         # Ensure cos/sin shapes are aligned for broadcasting against x1/x2.
-        # If x1 is (Batch, Heads, Seq, Num_groups) and cos is (Batch, Seq, Num_groups), unsqueeze(1)
-        # If x1 is (Batch, Seq, Num_groups) and cos is (Seq, Num_groups), unsqueeze(0)
-        while cos.ndim < x1.ndim:
-            if cos.size(0) == x1.size(-2):
-                # If the first dimension of cos matches seq_len, add a Batch/Heads dim at the front
-                cos = cos.unsqueeze(0)
-                sin = sin.unsqueeze(0)
-            else:
-                # Otherwise, it's likely adding a Heads dimension in the middle
-                cos = cos.unsqueeze(1)
-                sin = sin.unsqueeze(1)
+        # x1 can be (Batch, Heads, Seq, Num_groups) or (Batch, Seq, Num_groups)
+        if cos.ndim < x1.ndim:
+            missing_dims = x1.ndim - cos.ndim
+            seq_dim = cos.dim() - 2
+            new_shape = cos.shape[:seq_dim] + (1,) * missing_dims + cos.shape[seq_dim:]
+            cos = cos.reshape(*new_shape)
+            sin = sin.reshape(*new_shape)
 
         
         # Apply the 2D rotation matrix formula:
@@ -677,7 +674,7 @@ def load_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
 ) -> int:
-    checkpoint_data = torch.load(src, map_location=None)
+    checkpoint_data = torch.load(src, map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     model.load_state_dict(checkpoint_data["model_state"])
     optimizer.load_state_dict(checkpoint_data["optimizer_state"])
 

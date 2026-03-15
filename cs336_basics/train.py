@@ -32,6 +32,8 @@ def parse_args():
     help="saving path for checkpoints")
     parser.add_argument("--ckpt_load_path", type=str, default=None,
     help="checkpoints loading path")
+    parser.add_argument("--wandb_name", type=str, default=None,
+    help="custom name for wandb run")
 
     parser.add_argument("--vocab_size", type=int, default=10000,
     help="vocab size")
@@ -76,10 +78,11 @@ def parse_args():
     
 def init_logger_and_dir(args):
     os.makedirs(args.ckpt_save_path, exist_ok=True)
+    run_name = args.wandb_name if args.wandb_name else f"d_model_{args.d_model}_layers_{args.num_layers}"
     wandb.init(
         project="cs336-assignment1",
         config=vars(args),
-        name=f"d_model_{args.d_model}_layers_{args.num_layers}"
+        name=run_name
     )
 
 def load_tokenized_datasets(args):
@@ -160,6 +163,8 @@ if __name__ == "__main__":
 
     print(f"Model initialized! Starting step：{start_step}")
 
+    best_val_loss = float('inf')
+    best_val_step = 0
     for _ in range(start_step, args.total_steps):
         lr = lr_cosine_schedule(_, args.lr_max, args.lr_min, args.warmup_iters, args.cosine_iter_cycle)
 
@@ -192,6 +197,13 @@ if __name__ == "__main__":
                 val_loss = cross_entropy(val_logits, y_val)
                 print(f"--- Step {_}: Validation Loss {val_loss.item():.4f} ---")
                 wandb.log({"val/loss": val_loss.item(), "val/perplexity": np.exp(val_loss.item())})
+
+                if val_loss.item() < best_val_loss:
+                    best_val_loss = val_loss.item()
+                    best_val_step = _
+                    best_ckpt_path = os.path.join(args.ckpt_save_path, "best_model.pt")
+                    save_checkpoint(model, optimizer, _, best_ckpt_path)
+                    print(f" [Best model saved] val_loss={best_val_loss:.4f} at step {_}")
             model.train()
 
         if _ > 0 and _ % args.save_steps == 0:

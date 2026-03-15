@@ -36,14 +36,14 @@ def parse_args():
                         help="max generated tokens, default is 2048")
     parser.add_argument("--temperature", type=float, default=1.0,
                         help="temperature when generating tokens")
-    parser.add_argument("top_p", type=float, default=1.0,
+    parser.add_argument("--top_p", type=float, default=1.0,
                         help="top p value")
     
     parser.add_argument("--vocab_path", type=str, 
-                        default="D:\learning_resources\cs336\assignment\assignment1-basics\data\owt_32k.json", 
+                        default="data/owt_vocab.json", 
                         help="Path to vocab.json")
     parser.add_argument("--merge_path", type=str, 
-                        default="D:\learning_resources\cs336\assignment\assignment1-basics\data\owt_32k.txt",
+                        default="data/owt_merge.txt",
                         help="Path to merges.txt")
     return parser.parse_args()
 
